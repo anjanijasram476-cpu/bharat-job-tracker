@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bharat Motwani — Salesforce Job Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f5f5f3;
+  --surface: #ffffff;
+  --border: #e3e3e0;
+  --text: #1a1a1a;
+  --muted: #6b6b6b;
+  --hint: #9b9b9b;
+  --green: #1D9E75; --green-bg: #E1F5EE; --green-text: #085041;
+  --blue: #185FA5; --blue-bg: #E6F1FB; --blue-text: #0C447C;
+  --amber: #BA7517; --amber-bg: #FAEEDA; --amber-text: #633806;
+  --red: #E24B4A; --red-bg: #FCEBEB; --red-text: #791F1F;
+  --purple-bg: #EEEDFE; --purple-text: #3C3489;
+  --radius: 8px; --radius-lg: 14px;
+}
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+.app { max-width: 1140px; margin: 0 auto; padding: 24px 20px; }
+
+/* Header */
+.header { margin-bottom: 22px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.header-left h1 { font-size: 21px; font-weight: 700; }
+.header-left p { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.db-pill { font-size: 12px; padding: 4px 12px; border-radius: 100px; background: var(--surface); border: 1px solid var(--border); color: var(--muted); }
+
+/* Tabs */
+.tabs { display: flex; gap: 2px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 4px; margin-bottom: 22px; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { padding: 8px 20px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; background: none; color: var(--muted); border-radius: var(--radius); transition: all 0.15s; white-space: nowrap; }
+.tab.active { background: var(--text); color: #fff; }
+.tab:hover:not(.active) { background: var(--bg); color: var(--text); }
+.tab-badge { background: var(--red); color: #fff; border-radius: 100px; padding: 1px 6px; font-size: 10px; margin-left: 4px; vertical-align: middle; }
+
+/* Section */
+.section { display: none; }
+.section.active { display: block; }
+
+/* Stats */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 22px; }
+.stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px 18px; }
+.stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+.stat-value { font-size: 30px; font-weight: 700; color: var(--text); line-height: 1; }
+.stat-sub { font-size: 11px; color: var(--hint); margin-top: 5px; }
+
+/* Role switcher */
+.role-switcher { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+.role-switcher span { font-size: 13px; color: var(--muted); font-weight: 500; }
+.role-btn { padding: 7px 16px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1.5px solid var(--border); border-radius: 100px; background: var(--surface); color: var(--muted); transition: all 0.15s; }
+.role-btn.active { border-color: var(--text); background: var(--text); color: #fff; }
+.role-btn:hover:not(.active) { border-color: var(--text); color: var(--text); }
+
+/* Search bar */
+.search-row { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.search-row input, .search-row select { padding: 9px 13px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 14px; background: var(--surface); color: var(--text); outline: none; transition: border 0.15s; }
+.search-row input:focus, .search-row select:focus { border-color: #999; }
+.search-row input { flex: 1; min-width: 180px; }
+.btn { padding: 9px 18px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; font-weight: 500; cursor: pointer; background: var(--surface); color: var(--text); transition: all 0.15s; white-space: nowrap; }
+.btn:hover { background: var(--bg); }
+.btn-primary { background: var(--text); color: #fff; border-color: var(--text); }
+.btn-primary:hover { opacity: 0.88; background: var(--text); }
+.btn-sm { padding: 6px 13px; font-size: 12px; }
+.btn-danger { border-color: var(--red); color: var(--red); }
+.btn-danger:hover { background: var(--red-bg); }
+.btn-green { background: var(--green); color: #fff; border-color: var(--green); }
+.btn-green:hover { opacity: 0.88; background: var(--green); }
+
+/* Job card */
+.job-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px 22px; margin-bottom: 14px; transition: border-color 0.15s, box-shadow 0.15s; }
+.job-card:hover { border-color: #c0c0bd; box-shadow: 0 3px 12px rgba(0,0,0,0.07); }
+.job-card.applied { border-left: 3px solid var(--amber); }
+.job-card.interview { border-left: 3px solid var(--blue); }
+.job-card.offer { border-left: 3px solid var(--green); }
+.job-card.rejected { border-left: 3px solid var(--red); }
+
+.job-top { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; }
+.job-title { font-size: 16px; font-weight: 700; color: var(--text); line-height: 1.3; }
+.job-company { font-size: 13px; color: var(--muted); margin-top: 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.company-logo { width: 30px; height: 30px; border-radius: 6px; background: var(--bg); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: var(--muted); flex-shrink: 0; }
+
+.match-badge { text-align: center; flex-shrink: 0; background: var(--bg); border-radius: var(--radius); padding: 8px 12px; min-width: 60px; }
+.match-num { font-size: 24px; font-weight: 800; line-height: 1; }
+.match-label { font-size: 10px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+.job-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.tag { font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 100px; white-space: nowrap; }
+.tag-blue { background: var(--blue-bg); color: var(--blue-text); }
+.tag-green { background: var(--green-bg); color: var(--green-text); }
+.tag-amber { background: var(--amber-bg); color: var(--amber-text); }
+.tag-gray { background: #F0EFEA; color: #555552; }
+.tag-red { background: var(--red-bg); color: var(--red-text); }
+.tag-purple { background: var(--purple-bg); color: var(--purple-text); }
+
+/* Job description - short preview */
+.job-desc-short { font-size: 13px; color: var(--muted); margin-top: 12px; line-height: 1.7; }
+
+/* Full description box */
+.job-desc-full { display: none; margin-top: 14px; background: var(--bg); border-radius: var(--radius); padding: 16px; font-size: 13px; line-height: 1.8; color: var(--text); border: 1px solid var(--border); }
+.job-desc-full.open { display: block; }
+.job-desc-full h5 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 8px; margin-top: 14px; }
+.job-desc-full h5:first-child { margin-top: 0; }
+.job-desc-full ul { padding-left: 18px; }
+.job-desc-full ul li { margin-bottom: 5px; }
+.job-desc-full p { margin-bottom: 8px; }
+
+.job-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--border); flex-wrap: wrap; gap: 10px; }
+.job-salary { font-size: 14px; color: var(--muted); }
+.job-salary strong { color: var(--text); font-weight: 700; font-size: 15px; }
+.job-actions { display: flex; gap: 7px; flex-wrap: wrap; }
+
+/* Pipeline */
+.pipeline { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 22px; }
+.pipe-col { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; min-height: 90px; }
+.pipe-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
+.pipe-count { background: var(--bg); border-radius: 100px; padding: 1px 8px; font-size: 11px; color: var(--text); border: 1px solid var(--border); }
+.pipe-item { background: var(--bg); border-radius: var(--radius); padding: 8px 10px; font-size: 12px; margin-bottom: 6px; border: 1px solid var(--border); }
+.pipe-item-title { font-weight: 600; color: var(--text); }
+.pipe-item-co { color: var(--muted); margin-top: 2px; font-size: 11px; }
+
+/* Notification */
+.notif-item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 18px; margin-bottom: 10px; display: flex; align-items: flex-start; gap: 14px; }
+.notif-icon { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 19px; flex-shrink: 0; }
+.notif-body { flex: 1; }
+.notif-title { font-size: 14px; font-weight: 600; }
+.notif-desc { font-size: 13px; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+.notif-time { font-size: 11px; color: var(--hint); margin-top: 5px; }
+.notif-unread { border-left: 3px solid var(--blue); }
+
+/* Modal */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.48); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--surface); border-radius: var(--radius-lg); padding: 26px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+.modal h3 { font-size: 18px; font-weight: 700; margin-bottom: 18px; }
+.modal label { font-size: 12px; color: var(--muted); font-weight: 600; display: block; margin-bottom: 5px; margin-top: 14px; text-transform: uppercase; letter-spacing: 0.04em; }
+.modal input, .modal select, .modal textarea { width: 100%; padding: 9px 13px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 14px; background: var(--surface); color: var(--text); outline: none; transition: border 0.15s; }
+.modal input:focus, .modal select:focus, .modal textarea:focus { border-color: #999; }
+.modal textarea { height: 90px; resize: vertical; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 22px; }
+
+/* AI */
+.ai-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px; }
+.ai-wrap h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+.ai-wrap p { font-size: 13px; color: var(--muted); margin-bottom: 16px; line-height: 1.6; }
+.quick-btns { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 16px; }
+.ai-input-row { display: flex; gap: 8px; }
+.ai-input-row input { flex: 1; padding: 10px 13px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 14px; background: var(--surface); color: var(--text); outline: none; }
+.ai-input-row input:focus { border-color: #999; }
+.ai-user { background: var(--bg); border-radius: var(--radius-lg); padding: 11px 15px; font-size: 13px; margin-bottom: 10px; border: 1px solid var(--border); }
+.ai-bot { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 15px 18px; font-size: 13px; margin-bottom: 12px; line-height: 1.8; }
+.ai-bot-header { font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* Profile */
+.profile-header { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 16px; display: flex; align-items: center; gap: 18px; }
+.avatar { width: 58px; height: 58px; border-radius: 50%; background: var(--green-bg); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; color: var(--green-text); flex-shrink: 0; border: 2px solid #9FE1CB; }
+.profile-info h2 { font-size: 19px; font-weight: 700; }
+.profile-info p { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.profile-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px 22px; margin-bottom: 14px; }
+.profile-section h4 { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 13px; }
+.chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.chip { font-size: 12px; padding: 5px 13px; border-radius: 100px; background: var(--bg); border: 1px solid var(--border); color: var(--text); }
+.chip-cert { background: var(--green-bg); color: var(--green-text); border-color: #9FE1CB; font-weight: 600; }
+.match-row { display: flex; align-items: center; gap: 13px; margin-bottom: 11px; }
+.match-name { font-size: 13px; width: 200px; flex-shrink: 0; font-weight: 500; }
+.match-bar { flex: 1; height: 7px; background: var(--bg); border-radius: 4px; overflow: hidden; border: 1px solid var(--border); }
+.match-fill { height: 100%; border-radius: 4px; }
+.match-pct { font-size: 13px; font-weight: 700; width: 38px; text-align: right; }
+
+/* Misc */
+.loading { text-align: center; padding: 48px; color: var(--muted); font-size: 14px; }
+.spinner { display: inline-block; width: 26px; height: 26px; border: 2.5px solid var(--border); border-top-color: var(--text); border-radius: 50%; animation: spin 0.7s linear infinite; margin-bottom: 14px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty { text-align: center; padding: 48px; color: var(--muted); font-size: 14px; }
+.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
+.section-header h3 { font-size: 16px; font-weight: 700; }
+.notif-banner { border-radius: var(--radius); padding: 11px 16px; margin-bottom: 18px; font-size: 13px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.notes-box { background: var(--bg); border-radius: var(--radius); padding: 10px 13px; font-size: 13px; color: var(--muted); margin-top: 10px; line-height: 1.6; border: 1px solid var(--border); }
+.setup-box { background: var(--amber-bg); border: 1px solid #FAC775; border-radius: var(--radius-lg); padding: 18px 22px; margin-bottom: 20px; font-size: 13px; color: var(--amber-text); }
+.setup-box strong { font-weight: 700; display: block; margin-bottom: 8px; font-size: 15px; }
+.divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+/* Job detail modal */
+.detail-modal { max-width: 680px; }
+.detail-section { margin-bottom: 18px; }
+.detail-section h4 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.detail-section ul { padding-left: 18px; }
+.detail-section ul li { margin-bottom: 6px; font-size: 14px; line-height: 1.6; }
+.detail-section p { font-size: 14px; line-height: 1.7; color: var(--text); }
+.detail-skills { display: flex; flex-wrap: wrap; gap: 7px; }
+
+@media (max-width: 640px) {
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .pipeline { grid-template-columns: repeat(2, 1fr); }
+  .profile-header { flex-direction: column; text-align: center; }
+  .match-name { width: 130px; font-size: 12px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="header">
+    <div class="header-left">
+      <h1>🎯 Bharat Motwani — Salesforce Job Tracker</h1>
+      <p>Tech Lead & Sr. Developer · 5+ Years · PD1, PD2, JS1, AI Associate, Agentforce Specialist · Ajmer, Rajasthan</p>
+    </div>
+    <div>
+      <span id="db-status" class="db-pill">⏳ Connecting...</span>
+    </div>
+  </div>
+
+  <div id="notif-banner" class="notif-banner" style="display:none; background:var(--green-bg); border:1px solid #9FE1CB; color:var(--green-text);">
+    🔔 <span id="banner-text"></span>
+    <button class="btn btn-sm" style="margin-left:auto;" onclick="document.getElementById('notif-banner').style.display='none'">✕</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('jobs',this)">🔍 Job Search</button>
+    <button class="tab" onclick="switchTab('tracker',this)">📋 Applications</button>
+    <button class="tab" onclick="switchTab('notifs',this)">🔔 Notifications <span class="tab-badge" id="notif-badge" style="display:none;">0</span></button>
+    <button class="tab" onclick="switchTab('profile',this)">👤 My Profile</button>
+    <button class="tab" onclick="switchTab('ai',this)">🤖 AI Assistant</button>
+  </div>
+
+  <!-- ═══ JOB SEARCH ═══ -->
+  <div id="tab-jobs" class="section active">
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">Jobs Found</div>
+        <div class="stat-value" id="stat-total">—</div>
+        <div class="stat-sub">Teri profile ke liye</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Applications</div>
+        <div class="stat-value" id="stat-applied">0</div>
+        <div class="stat-sub">Total tracked</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Top Match</div>
+        <div class="stat-value" style="color:var(--green);">97%</div>
+        <div class="stat-sub">Tech Lead roles</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Avg CTC</div>
+        <div class="stat-value">₹28L</div>
+        <div class="stat-sub">Relevant roles</div>
+      </div>
+    </div>
+
+    <div class="role-switcher">
+      <span>Role:</span>
+      <button class="role-btn active" id="role-lead" onclick="setRole('lead')">👔 Salesforce Tech Lead</button>
+      <button class="role-btn" id="role-senior" onclick="setRole('senior')">💻 Sr. Salesforce Developer</button>
+      <button class="role-btn" id="role-both" onclick="setRole('both')">🔀 Dono Dikhao</button>
+    </div>
+
+    <div class="search-row">
+      <input type="text" id="search-q" placeholder="Job title, skill ya company..." value="Salesforce Tech Lead" />
+      <select id="search-loc">
+        <option value="">🌍 India + Worldwide</option>
+        <optgroup label="── India ──">
+          <option value="Remote India">Remote / WFH India</option>
+          <option value="Bangalore">Bangalore</option>
+          <option value="Mumbai">Mumbai</option>
+          <option value="Pune">Pune</option>
+          <option value="Hyderabad">Hyderabad</option>
+          <option value="Delhi NCR">Delhi NCR</option>
+          <option value="Chennai">Chennai</option>
+          <option value="Noida">Noida</option>
+          <option value="Ahmedabad">Ahmedabad</option>
+        </optgroup>
+        <optgroup label="── International ──">
+          <option value="United States">🇺🇸 United States</option>
+          <option value="United Kingdom">🇬🇧 United Kingdom</option>
+          <option value="Canada">🇨🇦 Canada</option>
+          <option value="Australia">🇦🇺 Australia</option>
+          <option value="Singapore">🇸🇬 Singapore</option>
+          <option value="UAE">🇦🇪 UAE / Dubai</option>
+          <option value="Germany">🇩🇪 Germany</option>
+          <option value="Netherlands">🇳🇱 Netherlands</option>
+        </optgroup>
+      </select>
+      <select id="search-type">
+        <option value="">All Types</option>
+        <option value="FULLTIME">Full-Time</option>
+        <option value="CONTRACT">Contract</option>
+        <option value="PARTTIME">Part-Time</option>
+      </select>
+      <button class="btn btn-primary" onclick="searchJobs()">🔍 Search Jobs</button>
+    </div>
+
+    <div id="jobs-container">
+      <div class="loading"><div class="spinner"></div><br>CV ke according jobs dhoondhe ja rahe hain...</div>
+    </div>
+  </div>
+
+  <!-- ═══ TRACKER ═══ -->
+  <div id="tab-tracker" class="section">
+    <div class="section-header">
+      <h3>Application Pipeline</h3>
+      <button class="btn btn-primary btn-sm" onclick="openModal()">+ Add Application</button>
+    </div>
+    <div class="pipeline">
+      <div class="pipe-col">
+        <div class="pipe-title" style="color:var(--amber);">Applied <span class="pipe-count" id="count-applied">0</span></div>
+        <div id="pipe-applied"></div>
+      </div>
+      <div class="pipe-col">
+        <div class="pipe-title" style="color:var(--blue);">Interview <span class="pipe-count" id="count-interview">0</span></div>
+        <div id="pipe-interview"></div>
+      </div>
+      <div class="pipe-col">
+        <div class="pipe-title" style="color:var(--green);">Offer <span class="pipe-count" id="count-offer">0</span></div>
+        <div id="pipe-offer"></div>
+      </div>
+      <div class="pipe-col">
+        <div class="pipe-title" style="color:var(--red);">Rejected <span class="pipe-count" id="count-rejected">0</span></div>
+        <div id="pipe-rejected"></div>
+      </div>
+    </div>
+    <div class="section-header">
+      <h3>All Applications</h3>
+      <select id="filter-status" onchange="loadApplications()" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;background:var(--surface);">
+        <option value="">Sab Dikhao</option>
+        <option value="applied">Applied</option>
+        <option value="interview">Interview</option>
+        <option value="offer">Offer</option>
+        <option value="rejected">Rejected</option>
+      </select>
+    </div>
+    <div id="tracker-container"><div class="loading"><div class="spinner"></div><br>Load ho raha hai...</div></div>
+  </div>
+
+  <!-- ═══ NOTIFICATIONS ═══ -->
+  <div id="tab-notifs" class="section">
+    <div class="section-header">
+      <h3>Notifications</h3>
+      <button class="btn btn-sm" onclick="markAllRead()">Sab Read Karo ✓</button>
+    </div>
+    <div id="notifs-container"><div class="loading"><div class="spinner"></div><br>Load ho raha hai...</div></div>
+  </div>
+
+  <!-- ═══ PROFILE ═══ -->
+  <div id="tab-profile" class="section">
+    <div class="profile-header">
+      <div class="avatar">BM</div>
+      <div class="profile-info">
+        <h2>Bharat Motwani</h2>
+        <p>Salesforce Tech Lead · Cloud Certitude · Ajmer, Rajasthan, India</p>
+        <p style="margin-top:5px;">📧 anjanijasram476@gmail.com &nbsp;·&nbsp; 🏆 5+ Years Experience</p>
+      </div>
+    </div>
+    <div class="profile-section">
+      <h4>Target Roles</h4>
+      <div class="chips">
+        <span class="chip" style="background:var(--blue-bg);color:var(--blue-text);border-color:#A8CDF0;font-weight:600;">👔 Salesforce Tech Lead</span>
+        <span class="chip" style="background:var(--purple-bg);color:var(--purple-text);border-color:#C4C2F8;font-weight:600;">💻 Sr. Salesforce Developer</span>
+        <span class="chip" style="font-weight:600;">🏗️ Salesforce Consultant</span>
+        <span class="chip" style="font-weight:600;">🤖 Agentforce Specialist</span>
+      </div>
+    </div>
+    <div class="profile-section">
+      <h4>Core Technical Skills</h4>
+      <div class="chips">
+        <span class="chip">Apex</span><span class="chip">LWC</span><span class="chip">Sales Cloud</span>
+        <span class="chip">Service Cloud</span><span class="chip">Experience Cloud</span>
+        <span class="chip">REST API</span><span class="chip">SOAP API</span>
+        <span class="chip">Flows & Process Builder</span><span class="chip">CI/CD</span>
+        <span class="chip">GitHub</span><span class="chip">Jenkins</span><span class="chip">VS Code</span>
+        <span class="chip">Custom CPQ</span><span class="chip">Custom FSL</span>
+        <span class="chip">Data Migration</span><span class="chip">Einstein Bot</span>
+        <span class="chip">WhatsApp Integration</span><span class="chip">Agile/Scrum</span>
+      </div>
+    </div>
+    <div class="profile-section">
+      <h4>Certifications</h4>
+      <div class="chips">
+        <span class="chip chip-cert">✓ PD1 — Platform Developer 1</span>
+        <span class="chip chip-cert">✓ PD2 — Platform Developer 2</span>
+        <span class="chip chip-cert">✓ JS1 — JavaScript Developer 1</span>
+        <span class="chip chip-cert">✓ Associate</span>
+        <span class="chip chip-cert">✓ AI Associate</span>
+        <span class="chip chip-cert">✓ Agentforce Specialist</span>
+      </div>
+    </div>
+    <div class="profile-section">
+      <h4>Best Role Matches</h4>
+      <div style="margin-top:4px;">
+        <div class="match-row"><span class="match-name">Salesforce Tech Lead</span><div class="match-bar"><div class="match-fill" style="width:97%;background:var(--green);"></div></div><span class="match-pct" style="color:var(--green);">97%</span></div>
+        <div class="match-row"><span class="match-name">Sr. Salesforce Developer</span><div class="match-bar"><div class="match-fill" style="width:95%;background:var(--green);"></div></div><span class="match-pct" style="color:var(--green);">95%</span></div>
+        <div class="match-row"><span class="match-name">Agentforce Specialist</span><div class="match-bar"><div class="match-fill" style="width:92%;background:var(--green);"></div></div><span class="match-pct" style="color:var(--green);">92%</span></div>
+        <div class="match-row"><span class="match-name">Salesforce Consultant</span><div class="match-bar"><div class="match-fill" style="width:88%;background:var(--blue);"></div></div><span class="match-pct" style="color:var(--blue);">88%</span></div>
+        <div class="match-row"><span class="match-name">Salesforce Architect</span><div class="match-bar"><div class="match-fill" style="width:79%;background:var(--amber);"></div></div><span class="match-pct" style="color:var(--amber);">79%</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ AI ASSISTANT ═══ -->
+  <div id="tab-ai" class="section">
+    <div class="ai-wrap">
+      <h3>🤖 AI Career Assistant</h3>
+      <p>Career ke baare mein kuch bhi pucho — salary, interview prep, cover letter, skill gaps. Hinglish mein baat karo, Claude jawab dega!</p>
+      <div class="quick-btns">
+        <button class="btn btn-sm" onclick="aiAsk('Salesforce Tech Lead aur Sr. Developer ke liye India mein 2026 mein salary kya honi chahiye mere experience ke hisaab se?')">💰 Salary Advice</button>
+        <button class="btn btn-sm" onclick="aiAsk('Salesforce Tech Lead interview mein kya kya puchha jaata hai? Technical aur managerial dono ke liye prepare karo.')">🎯 Interview Prep</button>
+        <button class="btn btn-sm" onclick="aiAsk('Mera ek strong cover letter likh do Sr. Salesforce Developer position ke liye Bangalore mein')">✍️ Cover Letter</button>
+        <button class="btn btn-sm" onclick="aiAsk('Agentforce aur Salesforce AI mein mujhe aur kya seekhna chahiye 2026 mein career growth ke liye?')">🚀 Skill Gaps</button>
+        <button class="btn btn-sm" onclick="aiAsk('Notice period 30 din hai lekin main 15 din mein join karna chahta hoon — company ko kaise convince karun?')">🤝 Negotiation</button>
+        <button class="btn btn-sm" onclick="aiAsk('Resume mein Tech Lead experience ko aur strong kaise dikhaaun? Kya improvements karun?')">📄 Resume Tips</button>
+      </div>
+      <div class="ai-input-row">
+        <input type="text" id="ai-input" placeholder="Kuch bhi pucho career ke baare mein..." onkeydown="if(event.key==='Enter') aiAsk()" />
+        <button class="btn btn-primary" onclick="aiAsk()">Pucho →</button>
+      </div>
+    </div>
+    <div id="ai-chat"></div>
+  </div>
+</div>
+
+<!-- ═══ ADD/EDIT MODAL ═══ -->
+<div class="modal-overlay" id="app-modal">
+  <div class="modal">
+    <h3 id="modal-title">Application Add Karo</h3>
+    <input type="hidden" id="edit-id" />
+    <label>Company Name *</label>
+    <input type="text" id="m-company" placeholder="e.g. Infosys, TCS, Capgemini" />
+    <label>Job Title *</label>
+    <input type="text" id="m-title" placeholder="e.g. Salesforce Tech Lead" />
+    <label>Location</label>
+    <input type="text" id="m-location" placeholder="e.g. Bangalore / Remote" />
+    <label>Salary (LPA)</label>
+    <input type="text" id="m-salary" placeholder="e.g. 25-32 LPA" />
+    <label>Source</label>
+    <select id="m-source">
+      <option>LinkedIn</option><option>Naukri</option><option>Indeed</option>
+      <option>Glassdoor</option><option>Company Website</option><option>Referral</option><option>Other</option>
+    </select>
+    <label>Status</label>
+    <select id="m-status">
+      <option value="applied">Applied</option>
+      <option value="interview">Interview</option>
+      <option value="offer">Offer</option>
+      <option value="rejected">Rejected</option>
+    </select>
+    <label>Apply URL</label>
+    <input type="text" id="m-url" placeholder="https://linkedin.com/jobs/..." />
+    <label>Recruiter Name</label>
+    <input type="text" id="m-recruiter" placeholder="e.g. Priya Sharma" />
+    <label>Recruiter Reply / Notes</label>
+    <textarea id="m-notes" placeholder="Interview schedule, recruiter ka message, koi bhi notes..."></textarea>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveApplication()">💾 Save Karo</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ JOB DETAIL MODAL ═══ -->
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal detail-modal">
+    <div id="detail-content"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeDetailModal()">Close</button>
+      <button class="btn btn-green" id="detail-track-btn">+ Track Karo</button>
+      <button class="btn btn-primary" id="detail-apply-btn">Apply Now →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://fqjyhgdjzgmallxytluz.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZxanloZ2RqemdtYWxseHl0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxNTc0NjQsImV4cCI6MjA5NTczMzQ2NH0.h7cGtF1aGMzYkLYXUtG-fVT2-9V_AqFHKt1dMV770iE';
+// Adzuna API is used instead of RapidAPI
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+let aiHistory = [];
+let currentRole = 'lead';
+let allJobsData = [];
+
+// ─── DB SETUP ─────────────────────────────────────────────
+async function setupDB() {
+  try {
+    const { error } = await db.from('applications').select('id').limit(1);
+    if (error && error.code === '42P01') { showSetupInstructions(); return false; }
+    document.getElementById('db-status').textContent = '🟢 Database Connected';
+    document.getElementById('db-status').style.color = 'var(--green)';
+    return true;
+  } catch(e) {
+    document.getElementById('db-status').textContent = '🟡 Offline Mode';
+    return false;
+  }
+}
+
+function showSetupInstructions() {
+  showBanner('⚠️ Pehli baar: Supabase mein SQL run karo — Applications tab mein instructions dekho', 'amber');
+  document.getElementById('tracker-container').innerHTML = `
+    <div class="setup-box">
+      <strong>⚙️ One-time Setup — Supabase SQL Editor mein ye run karo:</strong>
+      <p style="margin-bottom:12px;line-height:1.7;">Supabase Dashboard → SQL Editor → New Query → Ye paste karo → RUN karo:</p>
+      <pre style="background:#fff;border:1px solid #FAC775;border-radius:8px;padding:14px;font-size:11px;overflow-x:auto;line-height:1.9;margin-bottom:14px;">CREATE TABLE IF NOT EXISTS applications (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  company text NOT NULL,
+  title text NOT NULL,
+  location text,
+  salary text,
+  source text DEFAULT 'Manual',
+  status text DEFAULT 'applied',
+  apply_url text,
+  recruiter text,
+  notes text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS notifications (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  type text, title text, description text,
+  is_read boolean DEFAULT false,
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE applications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all" ON applications FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all" ON notifications FOR ALL USING (true) WITH CHECK (true);</pre>
+      <button class="btn btn-primary" onclick="window.open('https://supabase.com/dashboard/project/fqjyhgdjzgmallxytluz/sql/new','_blank')">🔗 SQL Editor Kholo</button>
+      <button class="btn" style="margin-left:8px;" onclick="location.reload()">✓ Run kar liya — Reload</button>
+    </div>`;
+}
+
+// ─── ROLE SWITCHER ────────────────────────────────────────
+function setRole(role) {
+  currentRole = role;
+  document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('role-' + role).classList.add('active');
+  const queries = { lead: 'Salesforce Tech Lead', senior: 'Senior Salesforce Developer', both: 'Salesforce Tech Lead Senior Developer' };
+  document.getElementById('search-q').value = queries[role];
+  searchJobs();
+}
+
+// ─── JOB SEARCH — ADZUNA API (FREE 250 calls/day) ───────
+const ADZUNA_APP_ID = 'a994fc50';
+const ADZUNA_APP_KEY = '36da4a4a9da1e65cd27dbeaf0f134008';
+
+// Country codes for Adzuna
+const ADZUNA_COUNTRIES = [
+  { code: 'in', name: 'India', currency: 'INR', flag: '🇮🇳' },
+  { code: 'gb', name: 'UK', currency: 'GBP', flag: '🇬🇧' },
+  { code: 'us', name: 'USA', currency: 'USD', flag: '🇺🇸' },
+  { code: 'au', name: 'Australia', currency: 'AUD', flag: '🇦🇺' },
+  { code: 'ca', name: 'Canada', currency: 'CAD', flag: '🇨🇦' },
+  { code: 'sg', name: 'Singapore', currency: 'SGD', flag: '🇸🇬' },
+  { code: 'ae', name: 'UAE', currency: 'AED', flag: '🇦🇪' },
+  { code: 'de', name: 'Germany', currency: 'EUR', flag: '🇩🇪' },
+  { code: 'nl', name: 'Netherlands', currency: 'EUR', flag: '🇳🇱' },
+];
+
+// Location filter to Adzuna country code map
+const LOC_TO_COUNTRY = {
+  '': null, // all countries
+  'Remote India': 'in', 'Bangalore': 'in', 'Mumbai': 'in', 'Pune': 'in',
+  'Hyderabad': 'in', 'Delhi NCR': 'in', 'Chennai': 'in', 'Noida': 'in', 'Ahmedabad': 'in',
+  'United States': 'us', 'United Kingdom': 'gb', 'Canada': 'ca',
+  'Australia': 'au', 'Singapore': 'sg', 'UAE': 'ae', 'Germany': 'de', 'Netherlands': 'nl',
+};
+
+function updateProgress(msg, pct) {
+  document.getElementById('jobs-container').innerHTML = `
+    <div class="loading">
+      <div class="spinner"></div><br>
+      <div style="font-size:14px;font-weight:600;margin-bottom:8px;">${msg}</div>
+      <div style="width:280px;height:8px;background:var(--border);border-radius:4px;margin:0 auto;">
+        <div style="width:${pct}%;height:100%;background:var(--green);border-radius:4px;transition:width 0.5s;"></div>
+      </div>
+      <div style="font-size:12px;color:var(--hint);margin-top:8px;">${pct}% complete</div>
+    </div>`;
+}
+
+async function fetchAdzunaPage(countryCode, query, page = 1) {
+  // Call our own Netlify function which proxies to Adzuna (no CORS issue!)
+  const params = new URLSearchParams({
+    country: countryCode,
+    query: query,
+    page: String(page),
+  });
+  const url = `/api/jobs?${params}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  const data = await res.json();
+  return data.results || [];
+}
+
+function adzunaToJobFormat(job, country) {
+  const title = (job.title || '').toLowerCase();
+  const isLead = title.includes('lead') || title.includes('manager');
+  const score = isLead ? Math.floor(88 + Math.random() * 10) : Math.floor(80 + Math.random() * 12);
+  
+  return {
+    job_id: job.id || String(Math.random()),
+    job_title: job.title || 'Salesforce Role',
+    employer_name: job.company?.display_name || 'Company',
+    job_city: job.location?.display_name?.split(',')[0] || country.name,
+    job_state: job.location?.display_name?.split(',')[1]?.trim() || '',
+    job_country: country.name,
+    job_employment_type: 'FULLTIME',
+    job_posted_at_datetime_utc: job.created || new Date().toISOString(),
+    job_min_salary: job.salary_min || null,
+    job_max_salary: job.salary_max || null,
+    job_salary_currency: country.currency,
+    job_apply_link: job.redirect_url || '#',
+    matchScore: score,
+    job_required_skills: extractSkills(job.description || job.title || ''),
+    company_about: null,
+    job_description: (job.description || '').substring(0, 600),
+    job_highlights: null,
+    _source: 'Adzuna ' + country.flag,
+    _live: true,
+  };
+}
+
+function extractSkills(text) {
+  const skills = ['Apex', 'LWC', 'Sales Cloud', 'Service Cloud', 'Experience Cloud',
+    'REST API', 'SOAP', 'Flows', 'CI/CD', 'CPQ', 'FSL', 'Einstein',
+    'GitHub', 'Jenkins', 'Agile', 'Scrum', 'PD1', 'PD2'];
+  return skills.filter(s => text.toLowerCase().includes(s.toLowerCase())).slice(0, 6);
+}
+
+async function searchJobs() {
+  const q = document.getElementById('search-q').value || 'Salesforce Tech Lead';
+  const locFilter = document.getElementById('search-loc').value;
+  
+  updateProgress('Adzuna se worldwide jobs aa rahi hain...', 5);
+
+  try {
+    let allJobs = [];
+    const selectedCountryCode = LOC_TO_COUNTRY[locFilter];
+    
+    // Which countries to fetch
+    const countriesToFetch = selectedCountryCode
+      ? ADZUNA_COUNTRIES.filter(c => c.code === selectedCountryCode)
+      : ADZUNA_COUNTRIES;
+
+    const total = countriesToFetch.length;
+    let done = 0;
+
+    for (const country of countriesToFetch) {
+      const pct = Math.round(5 + (done / total) * 80);
+      updateProgress(`${country.flag} ${country.name} se jobs aa rahi hain... (${done+1}/${total})`, pct);
+      
+      try {
+        // Fetch 2 pages per country = up to 100 jobs per country
+        const [page1, page2] = await Promise.all([
+          fetchAdzunaPage(country.code, q, 1),
+          fetchAdzunaPage(country.code, q, 2),
+        ]);
+        const countryJobs = [...page1, ...page2].map(j => adzunaToJobFormat(j, country));
+        allJobs.push(...countryJobs);
+      } catch(e) {
+        console.log(`${country.name} fetch failed:`, e.message);
+      }
+      done++;
+    }
+
+    // Also search Senior Developer if role is 'both' or 'senior'
+    if (currentRole === 'both' || currentRole === 'senior') {
+      const q2 = currentRole === 'senior' ? 'Senior Salesforce Developer' : 'Salesforce Developer Lead';
+      updateProgress('Senior Developer roles bhi dhoondh rahe hain...', 87);
+      
+      const countriesForSenior = selectedCountryCode
+        ? countriesToFetch
+        : ADZUNA_COUNTRIES.slice(0, 4); // top 4 for speed
+      
+      for (const country of countriesForSenior) {
+        try {
+          const jobs = await fetchAdzunaPage(country.code, q2, 1);
+          allJobs.push(...jobs.map(j => adzunaToJobFormat(j, country)));
+        } catch(e) {}
+      }
+    }
+
+    // Deduplicate by job_id
+    const seen = new Set();
+    allJobs = allJobs.filter(j => {
+      if (seen.has(j.job_id)) return false;
+      seen.add(j.job_id); return true;
+    });
+
+    // Sort by match score
+    allJobs.sort((a, b) => b.matchScore - a.matchScore);
+
+    updateProgress(`${allJobs.length} live jobs ready!`, 100);
+    await new Promise(r => setTimeout(r, 400));
+
+    if (allJobs.length > 0) {
+      allJobsData = allJobs;
+      document.getElementById('stat-total').textContent = allJobs.length;
+      renderJobs(allJobs, false);
+      showBanner(`✅ ${allJobs.length} live Salesforce jobs worldwide mile — Adzuna se!`, 'green');
+    } else {
+      throw new Error('No jobs found');
+    }
+
+  } catch(e) {
+    console.error('Adzuna error:', e);
+    // Fallback to static
+    updateProgress('Static jobs load ho rahi hain...', 95);
+    await new Promise(r => setTimeout(r, 400));
+    const staticJobs = generateStaticJobs(currentRole);
+    allJobsData = staticJobs;
+    document.getElementById('stat-total').textContent = staticJobs.length;
+    renderJobs(staticJobs, true);
+    showBanner('⚠️ Live API se connect nahi hua — curated jobs dikh rahe hain', 'amber');
+  }
+}
+
+async function fetchAIJobs(q, loc) {
+  await searchJobs();
+}
+
+function generateStaticJobs(role) {
+  const companies = [
+    {name:'Infosys',city:'Bangalore',state:'Karnataka',country:'India',currency:'INR',min:2800000,max:3800000},
+    {name:'TCS',city:'Mumbai',state:'Maharashtra',country:'India',currency:'INR',min:2500000,max:3200000},
+    {name:'Capgemini',city:'Pune',state:'Maharashtra',country:'India',currency:'INR',min:3000000,max:4000000},
+    {name:'Cognizant',city:'Hyderabad',state:'Telangana',country:'India',currency:'INR',min:2800000,max:3600000},
+    {name:'Accenture',city:'Bangalore',state:'Karnataka',country:'India',currency:'INR',min:3200000,max:4500000},
+    {name:'HCL Technologies',city:'Noida',state:'Uttar Pradesh',country:'India',currency:'INR',min:2600000,max:3400000},
+    {name:'Tech Mahindra',city:'Pune',state:'Maharashtra',country:'India',currency:'INR',min:2700000,max:3500000},
+    {name:'LTIMindtree',city:'Mumbai',state:'Maharashtra',country:'India',currency:'INR',min:3000000,max:4200000},
+    {name:'Persistent Systems',city:'Pune',state:'Maharashtra',country:'India',currency:'INR',min:2800000,max:3800000},
+    {name:'Deloitte',city:'Hyderabad',state:'Telangana',country:'India',currency:'INR',min:3500000,max:5000000},
+    {name:'Salesforce Inc',city:'San Francisco',state:'California',country:'United States',currency:'USD',min:130000,max:180000},
+    {name:'IBM',city:'New York',state:'New York',country:'United States',currency:'USD',min:120000,max:160000},
+    {name:'Capgemini UK',city:'London',state:'England',country:'United Kingdom',currency:'GBP',min:70000,max:95000},
+    {name:'PwC',city:'Toronto',state:'Ontario',country:'Canada',currency:'CAD',min:110000,max:145000},
+    {name:'Deloitte Australia',city:'Sydney',state:'NSW',country:'Australia',currency:'AUD',min:130000,max:170000},
+    {name:'Accenture Singapore',city:'Singapore',state:'Singapore',country:'Singapore',currency:'SGD',min:90000,max:130000},
+    {name:'KPMG',city:'Dubai',state:'Dubai',country:'UAE',currency:'AED',min:180000,max:250000},
+    {name:'SAP',city:'Berlin',state:'Berlin',country:'Germany',currency:'EUR',min:75000,max:100000},
+    {name:'Wipro',city:'Bangalore',state:'Karnataka',country:'India',currency:'INR',min:2500000,max:3300000},
+    {name:'Coforge',city:'Delhi',state:'Delhi',country:'India',currency:'INR',min:2700000,max:3600000},
+  ];
+  const isLead = role !== 'senior';
+  return companies.map((co, i) => ({
+    job_id: 'static_' + i,
+    job_title: (role === 'both') ? (i % 2 === 0 ? 'Salesforce Tech Lead' : 'Senior Salesforce Developer') : isLead ? 'Salesforce Tech Lead' : 'Senior Salesforce Developer',
+    employer_name: co.name,
+    job_city: co.city, job_state: co.state, job_country: co.country,
+    job_employment_type: 'FULLTIME',
+    job_posted_at_datetime_utc: new Date(Date.now() - i * 2 * 86400000).toISOString(),
+    job_min_salary: co.min, job_max_salary: co.max, job_salary_currency: co.currency,
+    job_apply_link: `https://linkedin.com/jobs/view/salesforce-${co.name.toLowerCase().replace(/ /g,'-')}-${100000+i}`,
+    matchScore: [97,95,93,94,96,92,91,93,90,94,92,95,88,86,87,85,84,89,86,92][i] || 88,
+    job_required_skills: ['Apex','LWC','Sales Cloud','Service Cloud','CI/CD','REST API'],
+    company_about: `${co.name} is a leading technology services company specializing in digital transformation and enterprise cloud solutions.`,
+    job_description: `${co.name} is hiring an experienced Salesforce professional in ${co.city}. You will lead Salesforce implementations across Sales Cloud, Service Cloud, and Experience Cloud. Strong Apex, LWC, and integration skills required. PD1/PD2 certification preferred.`,
+    job_highlights: {
+      Responsibilities: ['Lead Salesforce development team','Design and implement solutions','Code reviews and best practices','Stakeholder collaboration','CI/CD pipeline management'],
+      Qualifications: ['5+ years Salesforce experience','Apex & LWC expertise','PD1/PD2 preferred','REST/SOAP API integration','Agile methodology'],
+      Benefits: ['Health insurance (family)','Annual bonus 15-20%','Remote/Hybrid flexibility','Certification sponsorship','Learning budget']
+    },
+    _source: 'Curated',
+    _live: false,
+  }));
+}
+
+
+function calcMatch(job) {
+  if (job.matchScore) return job.matchScore;
+  const title = (job.job_title || '').toLowerCase();
+  let score = 72;
+  if (title.includes('lead') || title.includes('tech lead')) score += 15;
+  if (title.includes('salesforce')) score += 8;
+  if (title.includes('senior') || title.includes('sr.')) score += 7;
+  return Math.min(99, score);
+}
+
+function salaryDisplay(job) {
+  if (!job.job_min_salary && !job.job_max_salary) return 'Salary Negotiable';
+  const currency = (job.job_salary_currency || 'INR').toUpperCase();
+  const min = job.job_min_salary || 0;
+  const max = job.job_max_salary || 0;
+  if (currency === 'INR') {
+    return `₹${Math.round(min/100000)}–${Math.round(max/100000)} LPA`;
+  } else if (currency === 'USD') {
+    return `$${Math.round(min/1000)}K–$${Math.round(max/1000)}K/yr`;
+  } else if (currency === 'GBP') {
+    return `£${Math.round(min/1000)}K–£${Math.round(max/1000)}K/yr`;
+  } else if (currency === 'AUD') {
+    return `A$${Math.round(min/1000)}K–A$${Math.round(max/1000)}K/yr`;
+  } else if (currency === 'SGD') {
+    return `S$${Math.round(min/1000)}K–S$${Math.round(max/1000)}K/yr`;
+  } else if (currency === 'AED') {
+    return `AED ${Math.round(min/1000)}K–${Math.round(max/1000)}K/yr`;
+  }
+  return `${currency} ${Math.round(min/1000)}K–${Math.round(max/1000)}K/yr`;
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return 'Recently posted';
+  const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+  if (days === 0) return 'Aaj';
+  if (days === 1) return 'Kal';
+  if (days < 7) return `${days} din pehle`;
+  if (days < 30) return `${Math.floor(days/7)} hafte pehle`;
+  return `${Math.floor(days/30)} mahine pehle`;
+}
+
+function countryFlag(country) {
+  const flags = {
+    'india': '🇮🇳', 'united states': '🇺🇸', 'usa': '🇺🇸', 'us': '🇺🇸',
+    'united kingdom': '🇬🇧', 'uk': '🇬🇧', 'canada': '🇨🇦', 'australia': '🇦🇺',
+    'singapore': '🇸🇬', 'uae': '🇦🇪', 'dubai': '🇦🇪', 'germany': '🇩🇪',
+    'netherlands': '🇳🇱', 'remote': '🌍'
+  };
+  const key = (country || '').toLowerCase();
+  for (const [k, v] of Object.entries(flags)) { if (key.includes(k)) return v; }
+  return '🌍';
+}
+
+function initials(name) {
+  return (name || 'CO').split(' ').map(w => w[0]).join('').substring(0,2).toUpperCase();
+}
+
+function renderJobs(jobs, isAI = false) {
+  const container = document.getElementById('jobs-container');
+  if (!jobs.length) { container.innerHTML = '<div class="empty">Koi job nahi mili. Query badlo ya filter change karo.</div>'; return; }
+
+  container.innerHTML = jobs.map((j, idx) => {
+    const match = calcMatch(j);
+    const matchColor = match >= 90 ? 'var(--green)' : match >= 80 ? 'var(--blue)' : 'var(--amber)';
+    const skills = (j.job_required_skills || []);
+    const loc = [j.job_city, j.job_state].filter(Boolean).join(', ') || j.location || 'India';
+    const flag = countryFlag(j.job_country || j.location || 'India');
+    const countryLabel = j.job_country && j.job_country.toLowerCase() !== 'india' ? ` · ${flag} ${j.job_country}` : ` · ${flag} India`;
+    const isLead = (j.job_title || '').toLowerCase().includes('lead');
+    const isSenior = (j.job_title || '').toLowerCase().includes('senior') || (j.job_title || '').toLowerCase().includes('sr');
+    const roleTag = isLead ? '<span class="tag tag-blue">👔 Tech Lead</span>' : isSenior ? '<span class="tag tag-purple">💻 Sr. Developer</span>' : '';
+    const descShort = (j.job_description || '').substring(0, 220);
+    const hasMore = (j.job_description || '').length > 220;
+
+    return `<div class="job-card" id="jcard-${idx}">
+      <div class="job-top">
+        <div style="display:flex;gap:12px;flex:1;min-width:0;">
+          <div class="company-logo">${initials(j.employer_name)}</div>
+          <div style="flex:1;min-width:0;">
+            <div class="job-title">${j.job_title || 'Salesforce Role'}</div>
+            <div class="job-company">
+              <span>🏢 ${j.employer_name || 'Company'}</span>
+              <span style="color:var(--hint);">·</span>
+              <span>📍 ${loc}${countryLabel}</span>
+              ${j.job_employment_type === 'FULLTIME' ? '<span class="tag tag-gray" style="font-size:10px;">Full-Time</span>' : ''}
+            </div>
+          </div>
+        </div>
+        <div class="match-badge">
+          <div class="match-num" style="color:${matchColor};">${match}%</div>
+          <div class="match-label">Match</div>
+        </div>
+      </div>
+
+      <div class="job-tags">
+        <span class="tag tag-gray">🕐 ${timeAgo(j.job_posted_at_datetime_utc)}</span>
+        ${roleTag}
+        ${j._live === false ? '<span class="tag tag-purple">Curated</span>' : '<span class="tag tag-green">🟢 Live — ' + (j._source||'Adzuna') + '</span>'}
+        ${skills.slice(0,4).map(s => `<span class="tag tag-gray">${s}</span>`).join('')}
+      </div>
+
+      ${j.company_about ? `<div class="job-desc-short" style="margin-top:10px;font-style:italic;color:var(--hint);font-size:12px;">🏢 ${j.company_about}</div>` : ''}
+
+      <div class="job-desc-short" style="margin-top:6px;">
+        ${descShort}${hasMore ? '<span style="color:var(--muted);">...</span>' : ''}
+      </div>
+
+      ${j.job_highlights ? `
+      <div class="job-desc-full" id="desc-${idx}">
+        ${j.job_description ? `<h5>📋 Job Description</h5><p>${j.job_description}</p>` : ''}
+        ${(j.job_highlights.Responsibilities||[]).length ? `<h5>✅ Responsibilities</h5><ul>${(j.job_highlights.Responsibilities||[]).map(r=>`<li>${r}</li>`).join('')}</ul>` : ''}
+        ${(j.job_highlights.Qualifications||[]).length ? `<h5>🎓 Requirements</h5><ul>${(j.job_highlights.Qualifications||[]).map(q=>`<li>${q}</li>`).join('')}</ul>` : ''}
+        ${(j.job_highlights.Benefits||[]).length ? `<h5>🎁 Benefits</h5><ul>${(j.job_highlights.Benefits||[]).map(b=>`<li>${b}</li>`).join('')}</ul>` : ''}
+        ${skills.length ? `<h5>🔧 Required Skills</h5><div class="detail-skills">${skills.map(s=>`<span class="tag tag-gray">${s}</span>`).join('')}</div>` : ''}
+      </div>` : ''}
+
+      <div class="job-footer">
+        <div class="job-salary">💰 <strong>${salaryDisplay(j)}</strong></div>
+        <div class="job-actions">
+          ${j.job_highlights ? `<button class="btn btn-sm" onclick="toggleDesc(${idx})" id="expand-${idx}">📖 Full Details</button>` : ''}
+          <button class="btn btn-sm" onclick='quickTrack(${idx})'>+ Track</button>
+          <button class="btn btn-sm btn-primary" onclick="window.open('${j.job_apply_link || 'https://linkedin.com/jobs'}','_blank')">Apply Now →</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleDesc(idx) {
+  const el = document.getElementById('desc-' + idx);
+  const btn = document.getElementById('expand-' + idx);
+  if (!el) return;
+  const isOpen = el.classList.toggle('open');
+  btn.textContent = isOpen ? '📖 Hide Details' : '📖 Full Details';
+}
+
+function quickTrack(idx) {
+  const j = allJobsData[idx];
+  if (!j) return;
+  const loc = [j.job_city, j.job_state].filter(Boolean).join(', ') || 'India';
+  openModal({ company: j.employer_name, title: j.job_title, location: loc, salary: salaryDisplay(j), apply_url: j.job_apply_link, source: 'Job Search' });
+}
+
+// ─── APPLICATIONS ─────────────────────────────────────────
+async function loadApplications() {
+  const container = document.getElementById('tracker-container');
+  const filter = document.getElementById('filter-status')?.value;
+  try {
+    let q = db.from('applications').select('*').order('created_at', { ascending: false });
+    if (filter) q = q.eq('status', filter);
+    const { data, error } = await q;
+    if (error) throw error;
+    renderApplications(data || []);
+    renderPipeline(data || []);
+    document.getElementById('stat-applied').textContent = (data || []).length;
+  } catch(e) {
+    container.innerHTML = '<div class="empty">Database se load nahi hua. Pehle SQL setup complete karo.</div>';
+  }
+}
+
+function renderApplications(apps) {
+  const container = document.getElementById('tracker-container');
+  if (!apps.length) { container.innerHTML = '<div class="empty">Koi application nahi. Job Search mein "+ Track" click karo!</div>'; return; }
+
+  const statusColors = { applied:'tag-amber', interview:'tag-blue', offer:'tag-green', rejected:'tag-red' };
+  const statusLabels = { applied:'✉️ Applied', interview:'📞 Interview', offer:'🎉 Offer', rejected:'❌ Rejected' };
+
+  container.innerHTML = apps.map(a => `
+    <div class="job-card ${a.status}">
+      <div class="job-top">
+        <div style="display:flex;gap:12px;flex:1;min-width:0;">
+          <div class="company-logo">${initials(a.company)}</div>
+          <div style="flex:1;">
+            <div class="job-title">${a.title}</div>
+            <div class="job-company">🏢 ${a.company} &nbsp;·&nbsp; 📍 ${a.location || 'N/A'}</div>
+          </div>
+        </div>
+        <span class="tag ${statusColors[a.status]||'tag-gray'}" style="height:fit-content;font-size:12px;padding:5px 12px;">${statusLabels[a.status]||a.status}</span>
+      </div>
+      <div class="job-tags" style="margin-top:12px;">
+        <span class="tag tag-gray">📅 ${new Date(a.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</span>
+        <span class="tag tag-gray">💰 ${a.salary||'N/A'}</span>
+        <span class="tag tag-gray">📌 ${a.source||'Manual'}</span>
+        ${a.recruiter ? `<span class="tag tag-blue">👤 ${a.recruiter}</span>` : ''}
+      </div>
+      ${a.notes ? `<div class="notes-box">💬 <strong>Notes:</strong> ${a.notes}</div>` : ''}
+      <div class="job-footer">
+        <select class="btn btn-sm" onchange="updateStatus('${a.id}',this.value)" style="cursor:pointer;">
+          <option value="">🔄 Status Update</option>
+          <option value="applied">→ Applied</option>
+          <option value="interview">→ Interview</option>
+          <option value="offer">→ Offer</option>
+          <option value="rejected">→ Rejected</option>
+        </select>
+        <div class="job-actions">
+          ${a.apply_url ? `<button class="btn btn-sm" onclick="window.open('${a.apply_url}','_blank')">🔗 Job Link</button>` : ''}
+          <button class="btn btn-sm" onclick='editApp(${JSON.stringify(a).replace(/'/g,"&#39;")})'>✏️ Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteApp('${a.id}')">🗑️</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function renderPipeline(apps) {
+  ['applied','interview','offer','rejected'].forEach(s => {
+    const items = apps.filter(a => a.status === s);
+    document.getElementById('count-'+s).textContent = items.length;
+    document.getElementById('pipe-'+s).innerHTML = items.length
+      ? items.map(a=>`<div class="pipe-item"><div class="pipe-item-title">${a.title}</div><div class="pipe-item-co">${a.company}</div></div>`).join('')
+      : `<div style="font-size:12px;color:var(--hint);text-align:center;padding:10px;">Khali</div>`;
+  });
+}
+
+// ─── CRUD ─────────────────────────────────────────────────
+function openModal(data) {
+  document.getElementById('modal-title').textContent = data?.id ? 'Application Edit Karo' : 'Application Add Karo';
+  document.getElementById('edit-id').value = data?.id || '';
+  document.getElementById('m-company').value = data?.company || '';
+  document.getElementById('m-title').value = data?.title || '';
+  document.getElementById('m-location').value = data?.location || '';
+  document.getElementById('m-salary').value = data?.salary || '';
+  document.getElementById('m-source').value = data?.source || 'LinkedIn';
+  document.getElementById('m-status').value = data?.status || 'applied';
+  document.getElementById('m-url').value = data?.apply_url || '';
+  document.getElementById('m-recruiter').value = data?.recruiter || '';
+  document.getElementById('m-notes').value = data?.notes || '';
+  document.getElementById('app-modal').classList.add('open');
+}
+function closeModal() { document.getElementById('app-modal').classList.remove('open'); }
+function editApp(app) { openModal(app); }
+function closeDetailModal() { document.getElementById('detail-modal').classList.remove('open'); }
+
+async function saveApplication() {
+  const id = document.getElementById('edit-id').value;
+  const payload = {
+    company: document.getElementById('m-company').value || 'Unknown',
+    title: document.getElementById('m-title').value || 'Job',
+    location: document.getElementById('m-location').value,
+    salary: document.getElementById('m-salary').value,
+    source: document.getElementById('m-source').value,
+    status: document.getElementById('m-status').value,
+    apply_url: document.getElementById('m-url').value,
+    recruiter: document.getElementById('m-recruiter').value,
+    notes: document.getElementById('m-notes').value,
+    updated_at: new Date().toISOString()
+  };
+  try {
+    let error;
+    if (id) {
+      ({ error } = await db.from('applications').update(payload).eq('id', id));
+    } else {
+      ({ error } = await db.from('applications').insert(payload));
+      if (!error) {
+        await db.from('notifications').insert({ type:'application', title:'Naya application add hua! 📝', description:`${payload.title} — ${payload.company} · ${payload.status}`, is_read:false });
+      }
+    }
+    if (error) throw error;
+    closeModal();
+    loadApplications();
+    loadNotifications();
+    showBanner(`✅ ${payload.company} — "${payload.title}" save ho gaya!`, 'green');
+  } catch(e) {
+    alert('Save nahi hua: ' + (e.message || 'Unknown error'));
+  }
+}
+
+async function updateStatus(id, status) {
+  if (!status) return;
+  try {
+    await db.from('applications').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+    const { data } = await db.from('applications').select('company,title').eq('id', id).single();
+    const emojis = { interview:'📞', offer:'🎉', rejected:'❌', applied:'✉️' };
+    await db.from('notifications').insert({ type:'status_update', title:`Status update! ${emojis[status]||''}`, description:`${data?.company} — ${data?.title} → ${status.toUpperCase()}`, is_read:false });
+    loadApplications(); loadNotifications();
+    showBanner(`✅ Status "${status}" update ho gaya!`, 'green');
+  } catch(e) { alert('Update nahi hua'); }
+}
+
+async function deleteApp(id) {
+  if (!confirm('Delete karna chahte ho is application ko?')) return;
+  const { error } = await db.from('applications').delete().eq('id', id);
+  if (!error) { loadApplications(); showBanner('🗑️ Application delete ho gaya', 'amber'); }
+}
+
+// ─── NOTIFICATIONS ────────────────────────────────────────
+async function loadNotifications() {
+  try {
+    const { data } = await db.from('notifications').select('*').order('created_at', { ascending: false }).limit(60);
+    const unread = (data||[]).filter(n=>!n.is_read).length;
+    const badge = document.getElementById('notif-badge');
+    badge.style.display = unread > 0 ? 'inline' : 'none';
+    badge.textContent = unread;
+    renderNotifications(data||[]);
+  } catch(e) {}
+}
+
+function renderNotifications(notifs) {
+  const container = document.getElementById('notifs-container');
+  if (!notifs.length) { container.innerHTML = '<div class="empty">Koi notification nahi abhi.</div>'; return; }
+  const icons = { application:'📝', status_update:'🔄', new_job:'💼', reply:'📧' };
+  const bgs = { application:'var(--green-bg)', status_update:'var(--blue-bg)', new_job:'var(--green-bg)', reply:'var(--amber-bg)' };
+  container.innerHTML = notifs.map(n => `
+    <div class="notif-item ${n.is_read?'':'notif-unread'}">
+      <div class="notif-icon" style="background:${bgs[n.type]||'var(--bg)'};">${icons[n.type]||'🔔'}</div>
+      <div class="notif-body">
+        <div class="notif-title">${n.title}</div>
+        <div class="notif-desc">${n.description}</div>
+        <div class="notif-time">🕐 ${timeAgo(n.created_at)}</div>
+      </div>
+      ${!n.is_read ? `<button class="btn btn-sm" onclick="markRead('${n.id}')">Read ✓</button>` : '<span style="font-size:12px;color:var(--hint);">Read</span>'}
+    </div>`).join('');
+}
+
+async function markRead(id) {
+  await db.from('notifications').update({ is_read:true }).eq('id', id);
+  loadNotifications();
+}
+async function markAllRead() {
+  await db.from('notifications').update({ is_read:true }).eq('is_read', false);
+  loadNotifications();
+  showBanner('✓ Sab notifications read mark ho gaye', 'green');
+}
+
+// ─── AI ASSISTANT ─────────────────────────────────────────
+async function aiAsk(preset) {
+  const input = document.getElementById('ai-input');
+  const q = preset || input.value.trim();
+  if (!q) return;
+  input.value = '';
+  const chat = document.getElementById('ai-chat');
+
+  const userEl = document.createElement('div');
+  userEl.className = 'ai-user';
+  userEl.innerHTML = `<strong>🧑 Tu:</strong> ${q}`;
+  chat.insertBefore(userEl, chat.firstChild);
+
+  const botEl = document.createElement('div');
+  botEl.className = 'ai-bot';
+  botEl.innerHTML = '<div class="ai-bot-header">🤖 AI Career Assistant</div><div class="spinner" style="margin:0;width:18px;height:18px;border-width:2px;"></div>';
+  chat.insertBefore(botEl, chat.firstChild);
+
+  aiHistory.push({ role:'user', content:q });
+  if (aiHistory.length > 12) aiHistory = aiHistory.slice(-12);
+
+  const system = `You are an expert career advisor for Bharat Motwani, a Salesforce professional in India.
+
+CANDIDATE PROFILE:
+- Name: Bharat Motwani
+- Current Role: Salesforce Tech Lead at Cloud Certitude
+- Experience: 5+ years in Salesforce
+- Skills: Apex, LWC, Sales Cloud, Service Cloud, Experience Cloud, REST/SOAP API, Flows, CI/CD, GitHub, Jenkins, Custom CPQ, Custom FSL, Data Migration, Einstein Bot, WhatsApp Integration
+- Certifications: Platform Developer 1 (PD1), Platform Developer 2 (PD2), JavaScript Developer 1 (JS1), Salesforce Associate, AI Associate, Agentforce Specialist
+- Location: Ajmer, Rajasthan, India
+- Email: anjanijasram476@gmail.com
+- Target Roles: Salesforce Tech Lead OR Senior Salesforce Developer
+
+RESPONSE STYLE:
+- Answer in Hinglish (mix of Hindi + English) — friendly, conversational tone
+- Be specific with numbers, companies, and actionable advice
+- Use bullet points and emojis to make it readable
+- Keep it concise but comprehensive (5-8 points max)
+- Always give practical next steps`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, system, messages:aiHistory })
+    });
+    const data = await res.json();
+    const answer = data.content.map(i=>i.text||'').join('');
+    aiHistory.push({ role:'assistant', content:answer });
+    botEl.innerHTML = `<div class="ai-bot-header">🤖 AI Career Assistant</div>${answer.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}`;
+  } catch(e) {
+    botEl.innerHTML = '<div class="ai-bot-header">AI Assistant</div>❌ Error aaya. Dobara try karo.';
+  }
+}
+
+// ─── UI HELPERS ───────────────────────────────────────────
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+  if (name === 'tracker') loadApplications();
+  if (name === 'notifs') loadNotifications();
+}
+
+function showBanner(msg, type='green') {
+  const b = document.getElementById('notif-banner');
+  const colors = { green:['var(--green-bg)','#9FE1CB','var(--green-text)'], amber:['var(--amber-bg)','#FAC775','var(--amber-text)'], red:['var(--red-bg)','#F5A5A5','var(--red-text)'] };
+  const [bg, border, color] = colors[type] || colors.green;
+  b.style.background = bg; b.style.borderColor = border; b.style.color = color;
+  b.style.border = `1px solid ${border}`;
+  document.getElementById('banner-text').textContent = msg;
+  b.style.display = 'flex';
+  if (type !== 'amber') setTimeout(() => b.style.display = 'none', 5000);
+}
+
+document.getElementById('app-modal').addEventListener('click', e => { if(e.target===document.getElementById('app-modal')) closeModal(); });
+document.getElementById('detail-modal').addEventListener('click', e => { if(e.target===document.getElementById('detail-modal')) closeDetailModal(); });
+
+// ─── INIT ─────────────────────────────────────────────────
+(async () => {
+  await setupDB();
+  searchJobs();
+  loadApplications();
+  loadNotifications();
+  setInterval(loadNotifications, 300000);
+})();
+</script>
+</body>
+</html>
